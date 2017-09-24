@@ -1,0 +1,137 @@
+--[===[
+	This whole script is really messy
+	
+	It needs to be reformatted and optimized, as well as adding a way to prevent people from easily finding out other magic skills' keybinds
+--]===]
+local player = game.Players.LocalPlayer
+local pgui = player:WaitForChild("PlayerGui")
+local char = player.Character or player.CharacterAdded:Wait()
+local mouse = player:GetMouse()
+local tool
+local fullmodule = require(game.ReplicatedStorage.MagicList)
+local magic = fullmodule.ret()
+local canMagic = false
+local MagicLabel = pgui:WaitForChild("HUD"):WaitForChild("MagicTyper")
+local MagicText = MagicLabel:WaitForChild("TextLabel")
+MagicText.Text = ""
+
+function check()
+	local chil = char:GetChildren()
+	for i = 1, #chil do
+		local v = chil[i]
+		if v:IsA"Tool" then
+			tool = v 
+			for _, a in pairs(tool:GetChildren()) do
+				if a:IsA"StringValue" then
+					if a.Value == "Magic" then
+						canMagic = true
+					else
+						canMagic = false
+					end
+				end
+			end
+		end
+	end	
+end
+
+-- a is the name b.keys = keys b.rank = rank ect
+local action = Instance.new("BoolValue")
+action.Parent = nil
+local chosen = nil
+local StartingMagic = false 
+local lasttime = tick()
+local pressed = ""
+local enabled = true
+
+game:GetService("UserInputService").InputBegan:connect(function(input, gameProcessed)
+	if enabled == false or gameProcessed then return end	
+	check()
+	if canMagic == false then -- if they're allowed to use magic
+		
+		
+		
+		
+		if input.KeyCode == Enum.KeyCode.Z then -- z is the key used to start/stop magic sequences
+			
+			if StartingMagic == false and chosen == nil then -- Check if they already started typing it in
+				StartingMagic = true -- If not, make StartingMagic true
+				chosen = nil -- reset the chosen magic and magic sequence and make the GUI visible
+				pressed = ""
+				MagicText.Text = ""
+				MagicLabel.Visible = true
+				MagicText.TextColor3 = Color3.new(148/255, 101/255, 60/255)
+			
+			elseif StartingMagic == true then -- when you press z again the magic will activate
+				
+				StartingMagic = false
+				
+				if magic[pressed] then
+					chosen = magic[pressed]
+					MagicText.TextColor3 = Color3.new(72/255, 199/255, 74/255)
+				
+				else
+					enabled = false
+					game.ReplicatedStorage.Remotes.Magic:FireServer("wrongmagic",10)
+					MagicText.TextColor3 = Color3.new(199/255, 0, 20/255)
+					wait(.5)
+					MagicLabel.Visible = false
+					enabled = true
+				end
+			end
+			
+			
+				
+		if tick() - lasttime < 0.05 then 
+			print'hi'
+			pressed = ""
+			--MagicText.Text = ""
+			--MagicLabel.Visible = false
+		end
+		
+		elseif input.KeyCode == Enum.KeyCode.X and StartingMagic then 
+			lasttime = tick()
+			pressed = ""..pressed.."x"
+			MagicText.Text = pressed
+		elseif input.KeyCode == Enum.KeyCode.V then
+			lasttime = tick()
+			pressed = ""..pressed.."v"
+			MagicText.Text = pressed
+		elseif input.KeyCode == Enum.KeyCode.C then
+			lasttime = tick()
+			pressed = ""..pressed.."c"
+			MagicText.Text = pressed
+		elseif input.KeyCode == Enum.KeyCode.F then 
+			lasttime = tick()
+			pressed = ""..pressed.."f"
+			MagicText.Text = pressed
+		else if input.UserInputType == Enum.UserInputType.MouseButton1 and chosen and char.Humanoid.Health > 0 then 
+			if char.Magoi.Value > chosen.Magoi then
+				game.ReplicatedStorage.Remotes.Magic:FireServer(chosen.Name,chosen.Magoi,mouse.Hit,mouse.Target)
+				MagicText.Text = ""
+				MagicLabel.Visible = false
+				enabled = false
+				if chosen ~= nil then
+					wait(chosen.CoolDown + 0.5)
+				else			
+					wait(0.5)
+				end
+			
+				chosen = nil
+				enabled = true 
+			elseif char.Magoi.Value < chosen.Magoi then
+				MagicText.Text = ""
+				MagicLabel.Visible = false
+				enabled = false
+				if chosen ~= nil then
+					wait(chosen.CoolDown + 0.5)
+				else			
+					wait(0.5)
+				end
+			
+				chosen = nil
+				enabled = true 
+			end
+		end
+	end
+	end
+end)
