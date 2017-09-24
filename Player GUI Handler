@@ -1,0 +1,278 @@
+repeat wait() until game:GetService("ContentProvider").RequestQueueSize <= 0
+
+local player = game.Players.LocalPlayer
+local pgui = player:WaitForChild("PlayerGui")
+local hud = pgui:WaitForChild("HUD")
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+------------------------------------------------------------------------------------------------------------------------------
+-- Remotes
+local remotes = game.ReplicatedStorage.Remotes
+local getStats = remotes.GetStats
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+-- Initialize some variables
+local Inventory, BarHolder, GoldLabel = hud:WaitForChild("Inventory"), hud:WaitForChild("BarHolder"), hud:WaitForChild("Gold")
+
+
+		-- Inside BarHolder
+		
+		local HBackground, MBackground, DepravityMeter 
+											
+											= BarHolder:WaitForChild'HBackground', BarHolder:WaitForChild'MBackground', 
+											  BarHolder:WaitForChild'DepravityMeter'
+
+
+local repFolders = game.ReplicatedStorage[".PlayerFoldersRep"]
+local pFolder = repFolders:WaitForChild(player.Name)
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+-- Some modules/services we need
+
+local GuiModule = require(game.ReplicatedStorage:WaitForChild("GUIModule"))
+
+local TweenService = game:GetService("TweenService")
+
+game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Health, false) -- we use our own health bars l0l
+game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, false)
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+-- Gold Handling
+
+local initialG = getStats:InvokeServer("Gold")
+GoldLabel.Text = initialG
+
+local goldHolder = pFolder:FindFirstChild("Gold")
+
+
+goldHolder:GetPropertyChangedSignal("Value"):Connect(function()
+	GoldLabel.Text = tostring(goldHolder.Value)
+end)
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+
+-- Inventory handling
+
+local open = false
+
+GuiModule.growGui(Inventory)
+
+Inventory.MouseButton1Down:Connect(function()
+	open = not open
+	
+	-- open the inventory
+end)
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+-- BarHolder Handling
+
+----------------------------- HBackground Handling
+
+
+
+
+local HealthBar = HBackground:WaitForChild("Health")
+local HealthNum1, HealthNum2 = HBackground.HealthNum, HealthBar.HealthNum
+
+local function fixSizeAndPos()
+	HealthNum2.Size = UDim2.new(0, HBackground.AbsoluteSize.X * 0.5, 1, 0)
+	HealthNum2.Position = UDim2.new(0, HBackground.AbsoluteSize.X * 0.02, 0, 0)
+end
+
+local Full = Color3.new(80/255, 241/255, 21/255)
+local Danger = Color3.new(212/255, 28/255, 4/255)
+
+local colorlerp
+
+humanoid.HealthChanged:connect(function()
+	if humanoid ~= nil then
+		if colorlerp then colorlerp:Disconnect() end
+		local hp = (humanoid.Health)/(humanoid.MaxHealth)
+		HealthNum1.Text = (math.floor(tostring(humanoid.Health)).."/"..math.floor(tostring(humanoid.MaxHealth)))
+		HealthNum2.Text = (math.floor(tostring(humanoid.Health)).."/"..math.floor(tostring(humanoid.MaxHealth)))
+		HealthBar:TweenSize(UDim2.new(hp, 0,1,0), "Out", "Quad", 0.5, true)
+		if hp < 0.4 then
+			colorlerp = game:GetService("RunService").RenderStepped:Connect(function()
+				HealthBar.BackgroundColor3 = HealthBar.BackgroundColor3:lerp(Danger, 0.05)
+			end)
+		elseif hp > 0.4 then
+			colorlerp = game:GetService("RunService").RenderStepped:Connect(function()
+				HealthBar.BackgroundColor3 = HealthBar.BackgroundColor3:lerp(Full, 0.05)
+			end)
+		end
+	end
+end)
+
+HBackground.Changed:Connect(fixSizeAndPos)
+
+fixSizeAndPos()
+
+
+
+----------------------------- MBackground Handling
+
+local magoi = character:WaitForChild("Magoi")
+local MagoiBar = MBackground:WaitForChild("Magoi")
+
+magoi.Changed:connect(function()
+	if character then
+		local magoi = (magoi.Value)/(magoi.MaxValue)
+		MagoiBar:TweenSize(UDim2.new(magoi, 0,1,0), "Out", "Quad", 0.5, true)
+	end
+end)
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+-- Damage displayer
+
+local dmgDisplay = hud:WaitForChild("DamageDisplay")
+
+humanoid.HealthChanged:Connect(function(newHealth)
+	local maxHealth = humanoid.MaxHealth
+	dmgDisplay.ImageTransparency = newHealth/maxHealth
+end)
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+-- Leaderboard
+local leaderboard = hud:WaitForChild("LeaderboardFrame")
+local scroll = leaderboard:WaitForChild("Scroll")
+
+local tierVal = pFolder:FindFirstChild("Tier")
+
+local function fixSizeOfLeaderboard()
+	scroll.Size = UDim2.new(1, 0, 0, leaderboard.AbsoluteSize.Y)
+end
+
+local function setSizeAndPaddingOfCells()
+	local size = scroll.AbsoluteSize.Y
+	scroll.UIGridLayout.CellSize = UDim2.new(1, 0, 0, (18/276) * size)
+	scroll.UIGridLayout.CellPadding = UDim2.new(0, 5, 0, (3/276) * size)
+end
+
+local function createLabel(player)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, #game.Players:GetPlayers() * 19)
+	
+	local playersFolder = repFolders:WaitForChild(player.Name)
+	
+	local frame = Instance.new("Frame", scroll)
+	frame.Name = player.Name
+	frame.BackgroundColor3 = Color3.new(0, 0, 0)
+	frame.BackgroundTransparency = 0.7
+	
+	local name = Instance.new("TextLabel", frame)
+	name.Size = UDim2.new(0.7, 0, 0.9, 0)
+	name.Position = UDim2.new(0.13, 0, 0.05, 0)
+	name.BackgroundTransparency = 1
+	name.Text = player.Name
+	name.Font = Enum.Font.Cartoon
+	name.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+	name.TextScaled = true
+	name.TextXAlignment = Enum.TextXAlignment.Left
+	name.TextYAlignment = Enum.TextYAlignment.Top
+	if player:IsInGroup(3401648) and player:GetRankInGroup(3401648) >= 254 then
+		name.TextColor3 = Color3.new(180/255, 179/255, 106/255)
+	end
+	
+	local border = Instance.new("Frame", frame)
+	border.BackgroundTransparency = 0.4
+	border.BackgroundColor3 = Color3.new(0, 0, 0)
+	border.Size = UDim2.new(0.002, 0, 1, 0)
+	border.Position = UDim2.new(0.79, 0, 0, 0)
+	border.Name = "Border"
+	
+	local tier = Instance.new("TextLabel", frame)
+	tier.BackgroundTransparency = 1
+	tier.TextColor3 = Color3.new(1,1,1)
+	tier.Text = playersFolder:FindFirstChild("Tier").Value
+	tier.Font = Enum.Font.Garamond
+	tier.TextScaled = true
+	tier.Name = "TierLabel"
+	tier.Position = UDim2.new(0.8, 0, 0, 0)
+	tier.Size = UDim2.new(0.2,0, 1, 0)
+	
+	playersFolder:FindFirstChild("Tier"):GetPropertyChangedSignal("Value"):Connect(function()
+		tier.Text = playersFolder:FindFirstChild("Tier").Value
+	end)
+end
+
+fixSizeOfLeaderboard()
+setSizeAndPaddingOfCells()
+
+hud:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	fixSizeOfLeaderboard()
+end)
+
+leaderboard:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	setSizeAndPaddingOfCells()
+end)
+
+for i = 1, #game.Players:GetPlayers() do
+	local player = game.Players:GetPlayers()[i]
+	createLabel(player)
+end
+
+game.Players.PlayerAdded:Connect(function(player)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, #game.Players:GetPlayers() * 19)
+	createLabel(player)
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, #game.Players:GetPlayers() * 19)
+	scroll:FindFirstChild(player.Name):Destroy()
+end)
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------
+-- User input
+game:GetService("UserInputService").InputBegan:Connect(function(input, inGui)
+	if input.UserInputType == Enum.UserInputType.Keyboard and not inGui then
+		if input.KeyCode == Enum.KeyCode.Tab then
+			leaderboard.Visible = not leaderboard.Visible
+		end
+	end
+end)
+
