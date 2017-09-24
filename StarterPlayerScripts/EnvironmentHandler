@@ -1,0 +1,104 @@
+------------------------------------------------------------------------------------------------------------------------
+-- Initialize some things
+
+local player = game.Players.LocalPlayer
+local pgui = player:WaitForChild("PlayerGui")
+
+local hud = pgui:WaitForChild("HUD")
+
+local music = hud:WaitForChild("Music")
+
+local lastTouched
+
+local lighting = game.Lighting
+
+local TweenService = game:GetService("TweenService")
+
+local debris = game:GetService("Debris")
+
+------------------------------------------------------------------------------------------------------------------------
+-- Need to redesignate music to the correct object since StarterGui resets on spawn
+
+player.CharacterAdded:Connect(function()
+	hud = pgui:WaitForChild("HUD")
+	music = hud:WaitForChild("Music")
+end)
+
+------------------------------------------------------------------------------------------------------------------------
+
+local areaModels = workspace:FindFirstChild("Areas"):GetDescendants()
+
+
+------------------------------------------------------------------------------------------------------------------------
+-- These will be used for the music tweening
+
+local propertyGoals = {
+	Volume = 0
+}
+
+local info = TweenInfo.new(
+	1, -- time
+	Enum.EasingStyle.Quad, -- style
+	Enum.EasingDirection.Out, -- direction
+	0, -- repeats
+	true, -- reverses (1 second forward, 1 second backward)
+	0
+)
+
+------------------------------------------------------------------------------------------------------------------------
+-- Used to show the name of the area you entered
+
+local function showName(areaName, color)
+	local textLabel = Instance.new("TextLabel", hud)
+	textLabel.Size = UDim2.new(0.2, 0, 0.1, 0)
+	textLabel.Position = UDim2.new(0.4, 0, -0.1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.Font = Enum.Font.Garamond
+	textLabel.TextColor3 = color
+	textLabel.Text = areaName
+	textLabel.TextScaled = true
+	textLabel.TextStrokeTransparency = 0
+	textLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+	
+	
+	textLabel:TweenPosition(UDim2.new(0.4, 0, 0.075, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 1, true)
+	
+	delay(2, function() -- use delay because a wait(2) would cause the rest of the script to yield (bad)
+		textLabel:TweenPosition(UDim2.new(0.4, 0, -0.1, 0), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 1, true)
+		debris:AddItem(textLabel, 2)
+	end)
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- Handle all the entering of areas
+
+for i = 1, #areaModels do -- Get all of the models
+	if areaModels[i]:IsA("BasePart") then -- Make sure it's a basepart (.Touched doesn't work on other objects)
+		
+		local part = areaModels[i]
+		
+		local area = part.Parent
+		local fogColor = area:FindFirstChild("FogColor").Value
+		local musicId = area:FindFirstChild("Music").Value
+		local nameColor = area:FindFirstChild("NameColor").Value
+		
+		part.Touched:Connect(function(hit)
+			if hit.Parent == player.Character and lastTouched ~= area.Name then -- make sure that the hit part is your character and check if you are already in that area
+				showName(area.Name, nameColor) -- if not, show the name of the new area
+				lastTouched = area.Name -- redesignate area.Name to lastTouched
+				lighting.DayFogColor.Value = fogColor -- change the color of the fog
+				TweenService:Create(music, info, propertyGoals):Play() -- do stuff with music
+				delay(1, function() -- after 1 second has passed (which is the length of the tween), change the music ID
+					music:Play() 
+					music.TimePosition = 0
+					music.SoundId = "rbxassetid://" .. musicId
+					wait(1)
+					music.Volume = 0.5
+				end)
+			end
+		end)
+	end
+end
+
+
+
