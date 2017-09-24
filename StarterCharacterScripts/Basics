@@ -1,0 +1,219 @@
+--[===[
+	Most of this script is organized into sections such as:
+		- Blocking
+		- Block break
+		- preventing continuous jump
+		- Camera shaking effect
+		
+	Other than that, it's pretty messy and will be reformatted in the future (as well as optimized)
+--]===]
+
+
+
+
+
+
+
+local player = game.Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local humanoid = char:WaitForChild'Humanoid' 
+local effects = humanoid:WaitForChild'Effects'
+local UIS = game:GetService("UserInputService")
+local runStepped = game:GetService("RunService").Stepped
+local ItemType = nil
+local regen = false
+local blocking = char:WaitForChild("Blocking")
+local attacking = char:WaitForChild("Attacking")
+local breakBool = char:WaitForChild("GuardBreak")
+local actionDisable = char:WaitForChild("ActionDisable")
+local ws = char:WaitForChild("MaxWalkSpeed")
+local camera = workspace.CurrentCamera
+--------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------- RemoteEvents we need to wait for
+
+local Block = game.ReplicatedStorage.Remotes:WaitForChild("Blocking")
+local BlockBreak = game.ReplicatedStorage.Remotes:WaitForChild("BreakBlock")
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------------------
+-- Blocking
+local Blocking = false
+local SwordGuard = script.SwordGuard
+local Guard = {humanoid:LoadAnimation(SwordGuard);}
+
+
+
+function BlockToolCheck(player)
+	local Tool = char:FindFirstChildOfClass("Tool")
+	if Tool ~= nil and Tool:FindFirstChild("ItemType") then
+		ItemType = Tool:FindFirstChild("ItemType").Value
+	end
+	return ItemType or 1
+end
+
+
+function localBlock(state)
+	ItemType = BlockToolCheck()
+	if state and (not Blocking) and (not effects:FindFirstChild("Stun")) then 
+		Blocking = true
+		Guard[tonumber(ItemType)]:Play(0.1)
+	else 
+		Blocking = false 
+		Guard[tonumber(ItemType)]:Stop(0.1)
+	end
+	Block:FireServer(state)
+end
+
+	
+UIS.InputBegan:Connect(function(input, inGui)
+	if input.UserInputType == Enum.UserInputType.Keyboard and not inGui and char then
+		if input.KeyCode == Enum.KeyCode.E and (not attacking.Value) and (not breakBool.Value) and (not actionDisable.Value) and (not Blocking) then
+			localBlock(true)
+		elseif input.KeyCode == Enum.KeyCode.W then
+			
+		elseif input.KeyCode == Enum.KeyCode.S then
+			
+		end
+	end
+end)
+
+UIS.InputEnded:Connect(function(input, inGui)
+	if input.UserInputType == Enum.UserInputType.Keyboard and not inGui and char then
+		if input.KeyCode == Enum.KeyCode.E and Blocking then
+			localBlock(false)
+		end
+	end
+end)
+
+blocking:GetPropertyChangedSignal("Value"):Connect(function()
+	if blocking.Value == false then
+		Blocking = false
+		ItemType = BlockToolCheck()
+		Guard[tonumber(ItemType)]:Stop(0.2)
+	end
+end)
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- Guard break
+
+local GuardBreak = script.GuardBreak
+local Break = humanoid:LoadAnimation(GuardBreak)
+local cd = false
+local breakAnim
+local haventHit = true
+local speed = ws.Value
+
+UIS.InputBegan:Connect(function(key, gameProcessed)
+	if key.UserInputType == Enum.UserInputType.Keyboard and not gameProcessed then
+		if key.KeyCode == Enum.KeyCode.Q and cd == false and not actionDisable.Value then			
+			Break:Play()
+			
+			game.ReplicatedStorage.Remotes.BreakBlock:FireServer(humanoid, (5/16)) -- just used to set speed and variables
+			
+			cd = true
+			
+			spawn(function()
+				for i = 1, 30 do
+					if not haventHit then break end
+					
+					local ray = Ray.new(char.HumanoidRootPart.Position+Vector3.new(0, 1, 0), char.HumanoidRootPart.CFrame.lookVector * 7)
+					
+					local ignore = char
+					
+					local hit, position = workspace:FindPartOnRay(ray, ignore)
+					
+					if hit and (hit.Parent:FindFirstChild("Humanoid") or hit.Parent.Parent:FindFirstChild("Humanoid")) then
+						local hithum = hit.Parent:FindFirstChild("Humanoid")
+						if hit.Parent.Parent:FindFirstChild("Humanoid") then
+							 hithum =  hit.Parent.Parent:FindFirstChild("Humanoid")
+						end
+						if (char.HumanoidRootPart.Position - hithum.Parent.HumanoidRootPart.Position).magnitude < 4 then
+							haventHit = false
+							game.ReplicatedStorage.Remotes.BreakBlock:FireServer(hithum)
+						end
+					end
+					
+					
+					runStepped:Wait()
+					
+					if i == 30 then
+						Break:AdjustSpeed(0.1)
+					end
+				end
+			end)		
+
+			cd= true
+			
+			breakAnim = Break.Stopped:Connect(function()
+				game.ReplicatedStorage.Remotes.BreakBlock:FireServer(humanoid, (16/5))-- use this to send it back to full speed
+				wait(1)
+				cd = false
+				haventHit = true
+				breakAnim:Disconnect()
+				
+			end)
+		end
+	end
+end)
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- Prevent the jump spam
+
+humanoid.Jumping:Connect(function(active)
+	if not active then -- active becomes false right after they jump
+		humanoid.JumpPower = 0
+		wait(1)
+		humanoid.JumpPower = 50
+	end
+end)
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+-- Shaking effect
+
+local off = true
+local origValue = camera.FieldOfView
+
+local tweenInfo = TweenInfo.new(
+	1, 
+	Enum.EasingStyle.Quart,
+	Enum.EasingDirection.Out,
+	0,
+	false, 
+	0
+)
+
+local propertyGoals = {
+	FieldOfView = off and origValue or origValue + 10
+}
+local TweenService = game:GetService("TweenService")
+
+game.ReplicatedStorage.Remotes.ShakeCamera.OnClientEvent:Connect(function()
+	off = false
+	propertyGoals.FieldOfView = off and origValue or origValue + 10
+	local Tween = TweenService:Create(camera, tweenInfo, propertyGoals) -- tweens the FieldOfView property of workspace.CurrentCamera
+	Tween:Play() -- play it
+	for i=1,4 do
+	   humanoid.CameraOffset = Vector3.new(math.random(-1,1) * 0.3,math.random(-1,1) * 0.3,math.random(-1,1) * 0.3)--shake effect
+		wait(.05)
+	end
+	off = true
+	propertyGoals.FieldOfView = off and origValue or origValue + 10
+	local Tween = TweenService:Create(camera, tweenInfo, propertyGoals)
+	Tween:Play()
+end)
+
+--- Testing Skills
+UIS.InputBegan:Connect(function(key, gameProcessed)
+	if key.UserInputType == Enum.UserInputType.Keyboard and not gameProcessed then
+		if key.KeyCode == Enum.KeyCode.X and not actionDisable.Value then	
+			game.ReplicatedStorage.Remotes.Skill:FireServer("UpperCut")
+		end
+	end
+end)
+
+
+
